@@ -203,13 +203,20 @@ where
     where
         F: Fn(&mut V),
     {
+        let key_fragments = key.encode();
         {
-            if let Some(v) = self.get_mut(&key) {
+            if let Some(v) = self
+                .node
+                .get_mut(&key_fragments)
+                .and_then(|node| node.value_checked_mut(&key))
+            {
                 f(v);
                 return;
             }
         }
-        self.insert(key, default);
+        if self.node.insert(key, default, key_fragments).is_none() {
+            self.length += 1;
+        }
     }
 
     /// Check that the Trie invariants are satisfied - you shouldn't ever have to call this!

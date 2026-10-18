@@ -111,6 +111,39 @@ fn map_with_default() {
 }
 
 #[test]
+fn map_with_default_encodes_key_once() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static ENCODINGS: AtomicUsize = AtomicUsize::new(0);
+
+    #[derive(PartialEq, Eq)]
+    struct CountingKey(&'static str);
+
+    impl TrieKey for CountingKey {
+        fn encode_bytes(&self) -> Vec<u8> {
+            ENCODINGS.fetch_add(1, Ordering::Relaxed);
+            self.0.as_bytes().to_vec()
+        }
+    }
+
+    let mut trie = Trie::new();
+    for (i, key) in ["ab", "ac", "a", "b", ""].iter().enumerate() {
+        ENCODINGS.store(0, Ordering::Relaxed);
+        trie.map_with_default(CountingKey(key), |value| *value += 1, 42);
+        assert_eq!(ENCODINGS.load(Ordering::Relaxed), 1);
+        assert_eq!(trie.len(), i + 1);
+        assert_eq!(trie.get(&CountingKey(key)), Some(&42));
+
+        ENCODINGS.store(0, Ordering::Relaxed);
+        trie.map_with_default(CountingKey(key), |value| *value += 1, 0);
+        assert_eq!(ENCODINGS.load(Ordering::Relaxed), 1);
+        assert_eq!(trie.len(), i + 1);
+        assert_eq!(trie.get(&CountingKey(key)), Some(&43));
+        assert!(trie.check_integrity());
+    }
+}
+
+#[test]
 fn remove() {
     let mut trie = test_trie();
 
